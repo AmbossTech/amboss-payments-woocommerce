@@ -20,9 +20,9 @@ WooCommerce payment gateway that sends customers to the Amboss hosted checkout t
 
 The plugin sends the order total as `fiat_amount`. Amboss converts it to the wallet asset.
 
-| Store currency | Wallet asset             |
-| -------------- | ------------------------ |
-| USD            | BTC, USDT, USDC          |
+| Store currency | Wallet asset                                       |
+| -------------- | -------------------------------------------------- |
+| USD            | BTC, any USD stablecoin (symbol starts with `USD`) |
 
 ## Development
 

@@ -14,9 +14,9 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 
 	// Mirrors what create_receive accepts as fiat_amount: USD, paid into a BTC or
 	// USD stablecoin wallet.
-	private const SUPPORTED_CURRENCY = 'USD';
-	private const BTC_ASSET_TYPE     = 'BASE_ASSET';
-	private const USD_STABLECOINS    = array( 'USDT', 'USDC' );
+	private const SUPPORTED_CURRENCY    = 'USD';
+	private const BTC_ASSET_TYPE        = 'BASE_ASSET';
+	private const USD_STABLECOIN_PREFIX = 'USD';
 
 	public const PAYMENT_LABEL_BITCOIN = 'bitcoin';
 	public const PAYMENT_LABEL_CASHAPP = 'cashapp';
@@ -279,7 +279,7 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 			return $is_btc;
 		}
 
-		return $is_btc || in_array( $asset['symbol'], self::USD_STABLECOINS, true );
+		return $is_btc || 0 === strpos( $asset['symbol'], self::USD_STABLECOIN_PREFIX );
 	}
 
 	/**
