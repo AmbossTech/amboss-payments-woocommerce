@@ -2,15 +2,22 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class Amboss_Gateway extends WC_Payment_Gateway {
+/**
+ * "Pay with Bitcoin". Owns the settings that Amboss_Cash_App_Gateway shares.
+ */
+class Amboss_Gateway extends WC_Payment_Gateway {
 
 	public const ID = 'amboss';
 
-	private const DEFAULT_API_URL = 'https://app.amboss.tech/graphql';
+	public const SETTINGS_OPTION = 'woocommerce_' . self::ID . '_settings';
 
-	// The wallet asset is looked up once when the settings are saved, so a slow
-	// or failing API never delays cart and checkout page loads.
-	private const OPTION_WALLET_ASSET = 'amboss_wallet_asset';
+	private const DEFAULT_API_URL = 'https://app.amboss.tech/graphql';
+	private const DASHBOARD_URL   = 'https://rails.amboss.tech/pay';
+
+	// The wallet is looked up once when the settings are saved, so a slow or
+	// failing API never delays cart and checkout page loads.
+	private const OPTION_WALLET_ASSET   = 'amboss_wallet_asset';
+	private const OPTION_ENVIRONMENT_ID = 'amboss_environment_id';
 
 	// Mirrors what create_receive accepts as fiat_amount: USD, paid into a BTC or
 	// USD stablecoin wallet.
@@ -18,72 +25,109 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 	private const BTC_ASSET_TYPE        = 'BASE_ASSET';
 	private const USD_STABLECOIN_PREFIX = 'USD';
 
-	public const PAYMENT_LABEL_BITCOIN = 'bitcoin';
-	public const PAYMENT_LABEL_CASHAPP = 'cashapp';
+	private const MAX_DISCOUNT_PERCENT = 100;
+
+	protected const OPTION_PAY_WITH_BITCOIN = 'pay_with_bitcoin';
+	protected const OPTION_PAY_WITH_CASHAPP = 'pay_with_cashapp';
+
+	// The settings checkbox that shows this gateway at checkout.
+	protected const PAYMENT_OPTION = self::OPTION_PAY_WITH_BITCOIN;
 
 	public const META_ATTEMPT        = '_amboss_attempt';
 	public const META_TRANSACTION_ID = '_amboss_transaction_id';
 	public const META_ORDER_TOTAL    = '_amboss_order_total';
 
 	public function __construct() {
-		$this->id                 = self::ID;
+		$this->id                 = static::ID;
 		$this->has_fields         = false;
 		$this->method_title       = __( 'Amboss Payments', 'amboss-payments' );
-		$this->method_description = __( 'Accept Lightning payments through the Amboss hosted checkout.', 'amboss-payments' );
+		$this->method_description = __( 'Accept Bitcoin Lightning and Cash App payments through the Amboss hosted checkout.', 'amboss-payments' );
 		$this->supports           = array( 'products' );
 
 		$this->init_form_fields();
 		$this->init_settings();
 
-		$labels            = $this->payment_label_options();
-		$this->title       = $labels[ $this->get_option( 'payment_label' ) ] ?? $labels[ self::PAYMENT_LABEL_BITCOIN ];
-		$this->description = $this->get_option( 'description' );
+		$this->title       = $this->payment_title();
+		$this->description = $this->payment_description() . self::discount_note();
 
 		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
 	}
 
+	public static function is_amboss_method( string $payment_method ): bool {
+		return in_array( $payment_method, array( self::ID, Amboss_Cash_App_Gateway::ID ), true );
+	}
+
+	public static function discount_percent(): float {
+		$settings = get_option( self::SETTINGS_OPTION, array() );
+		return (float) ( $settings['discount_percent'] ?? 0 );
+	}
+
 	public function init_form_fields(): void {
 		$this->form_fields = array(
-			'enabled'        => array(
+			'enabled'                     => array(
 				'title'   => __( 'Enable', 'amboss-payments' ),
 				'type'    => 'checkbox',
 				'label'   => __( 'Enable Amboss Payments', 'amboss-payments' ),
 				'default' => 'no',
 			),
-			'payment_label'  => array(
-				'title'       => __( 'Payment method name', 'amboss-payments' ),
-				'type'        => 'radio',
-				'options'     => $this->payment_label_options(),
-				'default'     => self::PAYMENT_LABEL_BITCOIN,
-				'description' => __( 'Pay with Cash App opens the checkout with Cash App selected. It needs a BTC wallet.', 'amboss-payments' ),
+			self::OPTION_PAY_WITH_BITCOIN => array(
+				'title'   => __( 'Payment options', 'amboss-payments' ),
+				'type'    => 'checkbox',
+				'label'   => __( 'Pay with Bitcoin', 'amboss-payments' ),
+				'default' => 'yes',
 			),
-			'description'    => array(
-				'title'   => __( 'Description', 'amboss-payments' ),
-				'type'    => 'textarea',
-				'default' => __( 'Pay with the Lightning Network. You go to a secure Amboss checkout page to pay.', 'amboss-payments' ),
+			self::OPTION_PAY_WITH_CASHAPP => array(
+				'type'        => 'checkbox',
+				'label'       => __( 'Pay with Cash App', 'amboss-payments' ),
+				'default'     => 'no',
+				'description' => __( 'Each option is a separate payment method at checkout. Pay with Cash App opens the checkout with Cash App selected. It needs a BTC wallet.', 'amboss-payments' ),
 			),
-			'api_key'        => array(
+			'discount_percent'            => array(
+				'title'             => __( 'Discount (%)', 'amboss-payments' ),
+				'type'              => 'number',
+				'default'           => '0',
+				'custom_attributes' => array(
+					'min'  => '0',
+					'max'  => (string) self::MAX_DISCOUNT_PERCENT,
+					'step' => '0.01',
+				),
+				'description'       => __( 'Optional. Customers who pay with Amboss get this percentage off the products. Shipping is not discounted. Set 0 for no discount.', 'amboss-payments' ),
+			),
+			'api_key'                     => array(
 				'title'       => __( 'API key', 'amboss-payments' ),
 				'type'        => 'password',
-				'description' => __( 'Service API key from the Amboss dashboard.', 'amboss-payments' ),
+				'description' => sprintf(
+					/* translators: %s: link to the API keys page */
+					__( 'In the Amboss dashboard, %s. Give the key Wallets read access and Payments write access. You can limit the key to the wallet below. Copy the key and paste it here.', 'amboss-payments' ),
+					$this->dashboard_link( 'api-keys/create', __( 'create an API key', 'amboss-payments' ) )
+				),
 			),
-			'wallet_id'      => array(
+			'wallet_id'                   => array(
 				'title'       => __( 'Wallet ID', 'amboss-payments' ),
 				'type'        => 'text',
-				'description' => __( 'The wallet that receives the payments.', 'amboss-payments' ),
+				'description' => sprintf(
+					/* translators: %s: link to the wallets page */
+					__( 'The wallet that receives the payments. In the Amboss dashboard, %s and open the wallet. Copy the value under "Wallet ID".', 'amboss-payments' ),
+					$this->dashboard_link( 'wallets', __( 'go to Wallets', 'amboss-payments' ) )
+				),
 			),
-			'webhook_secret' => array(
+			'webhook_secret'              => array(
 				'title'       => __( 'Webhook secret', 'amboss-payments' ),
 				'type'        => 'password',
-				/* translators: %s: webhook URL */
-				'description' => sprintf( __( 'Add a webhook endpoint in the Amboss dashboard with this URL: %s', 'amboss-payments' ), '<code>' . esc_html( rest_url( Amboss_Webhook::ROUTE_NAMESPACE . Amboss_Webhook::ROUTE ) ) . '</code>' ),
+				'description' => sprintf(
+					/* translators: 1: link to the webhook page, 2: webhook URL */
+					__( 'Webhooks tell this store when an order is paid. In the Amboss dashboard, %1$s with this URL: %2$s Then copy the "Signing secret" and paste it here.', 'amboss-payments' ),
+					$this->dashboard_link( 'webhooks/create', __( 'create a webhook endpoint', 'amboss-payments' ) ),
+					'<code>' . esc_html( rest_url( Amboss_Webhook::ROUTE_NAMESPACE . Amboss_Webhook::ROUTE ) ) . '</code>'
+				),
 			),
-			'style_id'       => array(
-				'title'       => __( 'Checkout style ID', 'amboss-payments' ),
-				'type'        => 'text',
-				'description' => __( 'Optional. Branding for the checkout page.', 'amboss-payments' ),
+			// admin_options() fills the options from the API.
+			'style_id'                    => array(
+				'title'   => __( 'Checkout style', 'amboss-payments' ),
+				'type'    => 'select',
+				'options' => array( '' => __( 'Amboss default', 'amboss-payments' ) ),
 			),
-			'api_url'        => array(
+			'api_url'                     => array(
 				'title'   => __( 'API URL', 'amboss-payments' ),
 				'type'    => 'text',
 				'default' => self::DEFAULT_API_URL,
@@ -91,25 +135,50 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 		);
 	}
 
+	public function admin_options(): void {
+		$this->form_fields['style_id'] = array_merge( $this->form_fields['style_id'], $this->checkout_style_choices() );
+		parent::admin_options();
+	}
+
+	/**
+	 * @param string|null $value Posted value.
+	 */
+	public function validate_discount_percent_field( string $key, $value ): string {
+		$percent = min( max( (float) $value, 0 ), self::MAX_DISCOUNT_PERCENT );
+		return wc_format_decimal( $percent, 2, true );
+	}
+
 	public function process_admin_options(): bool {
 		$saved = parent::process_admin_options();
 		delete_option( self::OPTION_WALLET_ASSET );
+		delete_option( self::OPTION_ENVIRONMENT_ID );
 
 		if ( 'yes' !== $this->get_option( 'enabled' ) ) {
 			return $saved;
 		}
 
+		$pay_with_bitcoin = $this->is_option_on( self::OPTION_PAY_WITH_BITCOIN );
+		$pay_with_cashapp = $this->is_option_on( self::OPTION_PAY_WITH_CASHAPP );
+		if ( ! $pay_with_bitcoin && ! $pay_with_cashapp ) {
+			WC_Admin_Settings::add_error( __( 'Amboss: select at least one payment option.', 'amboss-payments' ) );
+			return $saved;
+		}
+
 		try {
-			$asset = $this->client()->get_wallet( $this->get_option( 'wallet_id' ) )['asset'];
+			$wallet = $this->client()->get_wallet( $this->get_option( 'wallet_id' ) );
+			$asset  = $wallet['asset'];
 			update_option( self::OPTION_WALLET_ASSET, $asset, false );
+			update_option( self::OPTION_ENVIRONMENT_ID, $wallet['environment_id'], false );
 		} catch ( Throwable $error ) {
 			WC_Admin_Settings::add_error( __( 'Amboss: cannot load the wallet. Check the API key and wallet ID.', 'amboss-payments' ) . ' ' . $error->getMessage() );
 			return $saved;
 		}
 
-		if ( ! $this->supports_asset( $asset ) ) {
-			/* translators: 1: wallet asset symbol, 2: payment method name, 3: store currency */
-			WC_Admin_Settings::add_error( sprintf( __( 'Amboss: a %1$s wallet cannot take "%2$s" payments in a store priced in %3$s.', 'amboss-payments' ), $asset['symbol'], $this->title, get_woocommerce_currency() ) );
+		if ( $pay_with_bitcoin && ! ( $this->is_usd_store() && self::accepts_bitcoin_asset( $asset ) ) ) {
+			$this->add_asset_error( $asset, __( 'Pay with Bitcoin', 'amboss-payments' ) );
+		}
+		if ( $pay_with_cashapp && ! ( $this->is_usd_store() && self::is_btc( $asset ) ) ) {
+			$this->add_asset_error( $asset, __( 'Pay with Cash App', 'amboss-payments' ) );
 		}
 
 		return $saved;
@@ -118,9 +187,11 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 	public function is_available(): bool {
 		$asset = $this->wallet_asset();
 		return parent::is_available()
+			&& $this->is_option_on( static::PAYMENT_OPTION )
 			&& $this->is_configured()
 			&& null !== $asset
-			&& $this->supports_asset( $asset );
+			&& $this->is_usd_store()
+			&& $this->accepts_asset( $asset );
 	}
 
 	/**
@@ -162,9 +233,7 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 			return array( 'result' => 'failure' );
 		}
 
-		if ( $this->is_cash_app() ) {
-			$checkout_url = add_query_arg( 'wallet', 'cashapp', $checkout_url );
-		}
+		$checkout_url = $this->checkout_url( $checkout_url );
 
 		$order->update_meta_data( self::META_ATTEMPT, $attempt );
 		$order->update_meta_data( self::META_TRANSACTION_ID, $transaction['id'] );
@@ -183,63 +252,114 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 		return (string) $this->get_option( 'webhook_secret' );
 	}
 
-	/**
-	 * Renders the 'radio' settings field type, which WC_Settings_API lacks.
-	 *
-	 * @param array{title: string, options: array<string, string>} $data
-	 */
-	public function generate_radio_html( string $key, array $data ): string {
-		$field_key = $this->get_field_key( $key );
-		$value     = $this->get_option( $key );
-		$data      = wp_parse_args(
-			$data,
-			array(
-				'description' => '',
-				'desc_tip'    => false,
-			)
-		);
+	protected function payment_title(): string {
+		return __( 'Pay with Bitcoin', 'amboss-payments' );
+	}
 
-		ob_start();
-		?>
-		<tr valign="top">
-			<th scope="row" class="titledesc"><?php echo esc_html( $data['title'] ); ?></th>
-			<td class="forminp">
-				<fieldset>
-					<legend class="screen-reader-text"><span><?php echo esc_html( $data['title'] ); ?></span></legend>
-					<?php foreach ( $data['options'] as $option => $label ) : ?>
-						<label>
-							<input type="radio" name="<?php echo esc_attr( $field_key ); ?>" value="<?php echo esc_attr( $option ); ?>" <?php checked( $value, $option ); ?> />
-							<?php echo esc_html( $label ); ?>
-						</label><br />
-					<?php endforeach; ?>
-					<?php echo $this->get_description_html( $data ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-				</fieldset>
-			</td>
-		</tr>
-		<?php
-		return (string) ob_get_clean();
+	protected function payment_description(): string {
+		return __( 'Pay with Bitcoin over the Lightning Network. You go to a secure Amboss checkout page to pay.', 'amboss-payments' );
 	}
 
 	/**
-	 * @param string|null $value Posted value.
+	 * @param array{symbol: string, type: string} $asset
 	 */
-	public function validate_radio_field( string $key, $value ): string {
-		$options = $this->form_fields[ $key ]['options'];
-		return isset( $options[ $value ] ) ? (string) $value : (string) $this->form_fields[ $key ]['default'];
+	protected function accepts_asset( array $asset ): bool {
+		return self::accepts_bitcoin_asset( $asset );
+	}
+
+	protected function checkout_url( string $url ): string {
+		return $url;
 	}
 
 	/**
-	 * @return array<string, string>
+	 * @param array{symbol: string, type: string} $asset
 	 */
-	private function payment_label_options(): array {
+	protected static function is_btc( array $asset ): bool {
+		return self::BTC_ASSET_TYPE === $asset['type'];
+	}
+
+	/**
+	 * @param array{symbol: string, type: string} $asset
+	 */
+	private static function accepts_bitcoin_asset( array $asset ): bool {
+		return self::is_btc( $asset ) || 0 === strpos( $asset['symbol'], self::USD_STABLECOIN_PREFIX );
+	}
+
+	private static function discount_note(): string {
+		$percent = self::discount_percent();
+		if ( $percent <= 0 ) {
+			return '';
+		}
+		/* translators: %s: discount percentage */
+		return ' ' . sprintf( __( 'Get %s%% off.', 'amboss-payments' ), wc_format_decimal( $percent, 2, true ) );
+	}
+
+	/**
+	 * Links to a page of the wallet's environment in the Amboss dashboard. Before
+	 * the first save the environment is unknown, so it links to the dashboard home.
+	 */
+	private function dashboard_link( string $page, string $text ): string {
+		$environment_id = (string) get_option( self::OPTION_ENVIRONMENT_ID, '' );
+		$url            = '' === $environment_id ? self::DASHBOARD_URL : self::DASHBOARD_URL . '/' . rawurlencode( $environment_id ) . '/' . $page;
+		return sprintf( '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>', esc_url( $url ), esc_html( $text ) );
+	}
+
+	/**
+	 * @return array{options: array<string, string>, description: string}
+	 */
+	private function checkout_style_choices(): array {
+		$options  = array( '' => __( 'Amboss default', 'amboss-payments' ) );
+		$selected = (string) $this->get_option( 'style_id' );
+		if ( '' !== $selected ) {
+			// Keeps the saved style selectable when the list cannot load.
+			$options[ $selected ] = $selected;
+		}
+
+		if ( '' === $this->get_option( 'api_key' ) ) {
+			return array(
+				'options'     => $options,
+				'description' => __( 'Save your API key to choose a checkout style.', 'amboss-payments' ),
+			);
+		}
+
+		try {
+			$styles = $this->client()->list_checkout_styles();
+		} catch ( Throwable $error ) {
+			return array(
+				'options'     => $options,
+				'description' => __( 'Cannot load the checkout styles.', 'amboss-payments' ) . ' ' . esc_html( $error->getMessage() ),
+			);
+		}
+
+		$create_link = $this->dashboard_link( 'checkout/branding/new', __( 'Create a checkout style', 'amboss-payments' ) );
+		if ( array() === $styles ) {
+			return array(
+				'options'     => $options,
+				/* translators: %s: link to create a checkout style */
+				'description' => sprintf( __( 'You have no checkout styles. %s to add your logo and colors, then reload this page.', 'amboss-payments' ), $create_link ),
+			);
+		}
+
+		foreach ( $styles as $style ) {
+			$options[ $style['id'] ] = $style['name'];
+		}
 		return array(
-			self::PAYMENT_LABEL_BITCOIN => __( 'Pay with Bitcoin', 'amboss-payments' ),
-			self::PAYMENT_LABEL_CASHAPP => __( 'Pay with Cash App', 'amboss-payments' ),
+			'options'     => $options,
+			/* translators: %s: link to create a checkout style */
+			'description' => sprintf( __( 'The logo and colors of the checkout page. %s.', 'amboss-payments' ), $create_link ),
 		);
 	}
 
-	private function is_cash_app(): bool {
-		return self::PAYMENT_LABEL_CASHAPP === $this->get_option( 'payment_label' );
+	private function is_option_on( string $option ): bool {
+		return 'yes' === $this->get_option( $option );
+	}
+
+	/**
+	 * @param array{symbol: string} $asset
+	 */
+	private function add_asset_error( array $asset, string $payment_option ): void {
+		/* translators: 1: wallet asset symbol, 2: payment option name, 3: store currency */
+		WC_Admin_Settings::add_error( sprintf( __( 'Amboss: a %1$s wallet cannot take "%2$s" payments in a store priced in %3$s.', 'amboss-payments' ), $asset['symbol'], $payment_option, get_woocommerce_currency() ) );
 	}
 
 	/**
@@ -265,21 +385,8 @@ final class Amboss_Gateway extends WC_Payment_Gateway {
 			&& '' !== $this->get_option( 'webhook_secret' );
 	}
 
-	/**
-	 * @param array{symbol: string, type: string} $asset
-	 */
-	private function supports_asset( array $asset ): bool {
-		if ( self::SUPPORTED_CURRENCY !== get_woocommerce_currency() ) {
-			return false;
-		}
-
-		$is_btc = self::BTC_ASSET_TYPE === $asset['type'];
-		// Cash App pays only bitcoin Lightning invoices.
-		if ( $this->is_cash_app() ) {
-			return $is_btc;
-		}
-
-		return $is_btc || 0 === strpos( $asset['symbol'], self::USD_STABLECOIN_PREFIX );
+	private function is_usd_store(): bool {
+		return self::SUPPORTED_CURRENCY === get_woocommerce_currency();
 	}
 
 	/**

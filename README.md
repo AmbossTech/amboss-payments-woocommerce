@@ -1,6 +1,6 @@
 # Amboss Payments for WooCommerce
 
-WooCommerce payment gateway that sends customers to the Amboss hosted checkout to pay over Lightning.
+WooCommerce payment gateway that sends customers to the Amboss hosted checkout to pay with Bitcoin Lightning or Cash App.
 
 ## How it works
 
@@ -11,9 +11,9 @@ WooCommerce payment gateway that sends customers to the Amboss hosted checkout t
 ## Setup
 
 1. Install and activate the plugin (WooCommerce 8.3+, PHP 7.4+).
-2. In **WooCommerce → Settings → Payments → Amboss Payments**, enter the API key and wallet ID.
-3. In the Amboss dashboard, add a webhook endpoint with the URL shown in the settings. Paste its secret into the plugin.
-4. Pick the payment method name: **Pay with Bitcoin** or **Pay with Cash App**. Cash App opens the checkout with Cash App selected (`?wallet=cashapp`) and needs a BTC wallet.
+2. In **WooCommerce → Settings → Payments → Amboss Payments**, enter the API key, wallet ID and webhook secret. Each field tells you where to get the value in the Amboss dashboard.
+3. Select the payment options: **Pay with Bitcoin**, **Pay with Cash App**, or both. Each option is a separate payment method at checkout. Cash App opens the checkout with Cash App selected (`?wallet=cashapp`) and needs a BTC wallet.
+4. Optional: set a discount for customers who pay with Amboss, and choose a checkout style.
 5. The store must use HTTPS. The API rejects non-HTTPS return URLs.
 
 ## Supported currencies

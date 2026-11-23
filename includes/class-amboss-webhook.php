@@ -44,7 +44,7 @@ final class Amboss_Webhook {
 
 		// The endpoint may also receive events for payments made outside this store.
 		$is_our_order = $order instanceof WC_Order
-			&& Amboss_Gateway::ID === $order->get_payment_method()
+			&& Amboss_Gateway::is_amboss_method( $order->get_payment_method() )
 			&& 'receive' === ( $data['direction'] ?? '' );
 		if ( ! $is_our_order ) {
 			return new WP_REST_Response( array( 'status' => 'ignored' ), 200 );

@@ -9,7 +9,11 @@ defined( 'ABSPATH' ) || exit;
 final class Amboss_Client {
 
 	private const GET_WALLET = 'query GetWallet($id: String!) {
-		payment { wallet { find_one(id: $id) { id asset { id symbol precision type } } } }
+		payment { wallet { find_one(id: $id) { id environment_id asset { id symbol precision type } } } }
+	}';
+
+	private const LIST_CHECKOUT_STYLES = 'query ListCheckoutStyles {
+		payment { checkout_style { find_many { id name } } }
 	}';
 
 	private const CREATE_RECEIVE = 'mutation CreateReceive($input: CreateReceiveTransactionInput!) {
@@ -25,11 +29,19 @@ final class Amboss_Client {
 	}
 
 	/**
-	 * @return array{id: string, asset: array{id: string, symbol: string, precision: int, type: string}}
+	 * @return array{id: string, environment_id: string, asset: array{id: string, symbol: string, precision: int, type: string}}
 	 */
 	public function get_wallet( string $wallet_id ): array {
 		$data = $this->request( self::GET_WALLET, array( 'id' => $wallet_id ) );
 		return $data['payment']['wallet']['find_one'];
+	}
+
+	/**
+	 * @return array<int, array{id: string, name: string}>
+	 */
+	public function list_checkout_styles(): array {
+		$data = $this->request( self::LIST_CHECKOUT_STYLES, array() );
+		return $data['payment']['checkout_style']['find_many'];
 	}
 
 	/**

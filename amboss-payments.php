@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:          Amboss Payments for WooCommerce
- * Description:          Accept Lightning payments through the Amboss hosted checkout.
+ * Description:          Accept Bitcoin Lightning and Cash App payments through the Amboss hosted checkout.
  * Version:              0.1.0
  * Requires at least:    6.4
  * Requires PHP:         7.4
@@ -40,16 +40,20 @@ add_action(
 
 		require_once __DIR__ . '/includes/class-amboss-client.php';
 		require_once __DIR__ . '/includes/class-amboss-gateway.php';
+		require_once __DIR__ . '/includes/class-amboss-cash-app-gateway.php';
 		require_once __DIR__ . '/includes/class-amboss-webhook.php';
+		require_once __DIR__ . '/includes/class-amboss-discount.php';
 
 		add_filter(
 			'woocommerce_payment_gateways',
 			static function ( array $gateways ): array {
 				$gateways[] = Amboss_Gateway::class;
+				$gateways[] = Amboss_Cash_App_Gateway::class;
 				return $gateways;
 			}
 		);
 		add_action( 'rest_api_init', array( Amboss_Webhook::class, 'register_route' ) );
+		Amboss_Discount::register();
 	}
 );
 
@@ -57,6 +61,7 @@ add_action(
 	'woocommerce_blocks_payment_method_type_registration',
 	static function ( \Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $registry ): void {
 		require_once __DIR__ . '/includes/class-amboss-blocks.php';
-		$registry->register( new Amboss_Blocks() );
+		$registry->register( new Amboss_Blocks( Amboss_Gateway::ID ) );
+		$registry->register( new Amboss_Blocks( Amboss_Cash_App_Gateway::ID ) );
 	}
 );
