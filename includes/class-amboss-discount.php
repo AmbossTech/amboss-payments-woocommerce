@@ -18,6 +18,8 @@ final class Amboss_Discount {
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( self::class, 'use_checkout_payment_method' ), 10, 2 );
 		add_action( 'woocommerce_checkout_create_order_fee_item', array( self::class, 'mark_fee_item' ), 10, 2 );
 		add_filter( 'woocommerce_available_payment_gateways', array( self::class, 'limit_order_pay_gateways' ) );
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( self::class, 'enforce_on_store_api_order' ), 10, 2 );
+		add_action( 'woocommerce_before_pay_action', array( self::class, 'enforce_on_order_pay' ) );
 	}
 
 	public static function apply( WC_Cart $cart ): void {
@@ -75,6 +77,36 @@ final class Amboss_Discount {
 			},
 			ARRAY_FILTER_USE_KEY
 		);
+	}
+
+	public static function enforce_on_store_api_order( WC_Order $order, WP_REST_Request $request ): void {
+		self::remove_unless_amboss( $order, (string) $request->get_param( 'payment_method' ) );
+	}
+
+	public static function enforce_on_order_pay( WC_Order $order ): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WooCommerce checked the nonce before this action.
+		self::remove_unless_amboss( $order, sanitize_key( wp_unslash( $_POST['payment_method'] ?? '' ) ) );
+	}
+
+	/**
+	 * Every path that pays an order ends here, so the discount stays on Amboss
+	 * payments even when a request skips the filtered gateway list.
+	 */
+	private static function remove_unless_amboss( WC_Order $order, string $payment_method ): void {
+		if ( Amboss_Gateway::is_amboss_method( $payment_method ) ) {
+			return;
+		}
+
+		$removed = false;
+		foreach ( $order->get_fees() as $item_id => $fee ) {
+			if ( 'yes' === $fee->get_meta( '_' . self::FEE_ID ) ) {
+				$order->remove_item( $item_id );
+				$removed = true;
+			}
+		}
+		if ( $removed ) {
+			$order->calculate_totals( false );
+		}
 	}
 
 	private static function has_discount( WC_Order $order ): bool {
