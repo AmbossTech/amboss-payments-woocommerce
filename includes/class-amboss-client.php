@@ -70,7 +70,8 @@ final class Amboss_Client {
 				'body'    => wp_json_encode(
 					array(
 						'query'     => $query,
-						'variables' => $variables,
+						// An empty PHP array encodes as [], and GraphQL needs an object.
+						'variables' => (object) $variables,
 					)
 				),
 			)

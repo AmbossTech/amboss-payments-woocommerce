@@ -14,7 +14,7 @@ final class Amboss_Cash_App_Gateway extends Amboss_Gateway {
 
 	public function __construct() {
 		parent::__construct();
-		$this->method_title = __( 'Amboss Payments (Cash App)', 'amboss-payments' );
+		$this->method_title = __( 'Cash App', 'amboss-payments' );
 		$this->enabled      = 'yes' === $this->enabled && 'yes' === $this->get_option( self::OPTION_PAY_WITH_CASHAPP ) ? 'yes' : 'no';
 
 		// This gateway has no settings form, so a save here would clear the shared settings.
@@ -42,7 +42,7 @@ final class Amboss_Cash_App_Gateway extends Amboss_Gateway {
 	public function admin_options(): void {
 		printf(
 			'<p>%s <a href="%s">%s</a></p>',
-			esc_html__( 'Pay with Cash App uses the Amboss Payments settings.', 'amboss-payments' ),
+			esc_html__( 'Cash App uses the Bitcoin Lightning settings.', 'amboss-payments' ),
 			esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout&section=' . parent::ID ) ),
 			esc_html__( 'Open the Amboss Payments settings', 'amboss-payments' )
 		);
@@ -54,15 +54,6 @@ final class Amboss_Cash_App_Gateway extends Amboss_Gateway {
 
 	protected function payment_description(): string {
 		return __( 'Pay with Cash App. You go to a secure Amboss checkout page to pay.', 'amboss-payments' );
-	}
-
-	/**
-	 * Cash App pays only bitcoin Lightning invoices.
-	 *
-	 * @param array{symbol: string, type: string} $asset
-	 */
-	protected function accepts_asset( array $asset ): bool {
-		return self::is_btc( $asset );
 	}
 
 	protected function checkout_url( string $url ): string {

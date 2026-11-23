@@ -11,19 +11,21 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 
 	public const SETTINGS_OPTION = 'woocommerce_' . self::ID . '_settings';
 
-	private const DEFAULT_API_URL = 'https://app.amboss.tech/graphql';
-	private const DASHBOARD_URL   = 'https://rails.amboss.tech/pay';
+	private const API_URL         = 'https://app.amboss.tech/graphql';
+	private const DASHBOARD_URL   = 'https://app.amboss.tech/pay';
 
 	// The wallet is looked up once when the settings are saved, so a slow or
 	// failing API never delays cart and checkout page loads.
 	private const OPTION_WALLET_ASSET   = 'amboss_wallet_asset';
 	private const OPTION_ENVIRONMENT_ID = 'amboss_environment_id';
 
-	// Mirrors what create_receive accepts as fiat_amount: USD, paid into a BTC or
-	// USD stablecoin wallet.
+	// A USD store, paid into a BTC or USD stablecoin wallet.
 	private const SUPPORTED_CURRENCY    = 'USD';
 	private const BTC_ASSET_TYPE        = 'BASE_ASSET';
 	private const USD_STABLECOIN_PREFIX = 'USD';
+
+	// The API maximum for asset invoices. The API default is 2 minutes.
+	private const STABLECOIN_EXPIRY_SECONDS = 240;
 
 	private const MAX_DISCOUNT_PERCENT = 100;
 
@@ -40,15 +42,15 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 	public function __construct() {
 		$this->id                 = static::ID;
 		$this->has_fields         = false;
-		$this->method_title       = __( 'Amboss Payments', 'amboss-payments' );
+		$this->method_title       = __( 'Bitcoin Lightning', 'amboss-payments' );
 		$this->method_description = __( 'Accept Bitcoin Lightning and Cash App payments through the Amboss hosted checkout.', 'amboss-payments' );
 		$this->supports           = array( 'products' );
 
 		$this->init_form_fields();
 		$this->init_settings();
 
-		$this->title       = $this->payment_title();
-		$this->description = $this->payment_description() . self::discount_note();
+		$this->title       = $this->payment_title() . self::discount_note();
+		$this->description = $this->payment_description();
 
 		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
 	}
@@ -73,14 +75,14 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 			self::OPTION_PAY_WITH_BITCOIN => array(
 				'title'   => __( 'Payment options', 'amboss-payments' ),
 				'type'    => 'checkbox',
-				'label'   => __( 'Pay with Bitcoin', 'amboss-payments' ),
+				'label'   => __( 'Pay with Bitcoin / Crypto', 'amboss-payments' ),
 				'default' => 'yes',
 			),
 			self::OPTION_PAY_WITH_CASHAPP => array(
 				'type'        => 'checkbox',
 				'label'       => __( 'Pay with Cash App', 'amboss-payments' ),
 				'default'     => 'no',
-				'description' => __( 'Each option is a separate payment method at checkout. Pay with Cash App opens the checkout with Cash App selected. It needs a BTC wallet.', 'amboss-payments' ),
+				'description' => __( 'Each option is a separate payment method at checkout. Pay with Cash App opens the checkout with Cash App selected.', 'amboss-payments' ),
 			),
 			'discount_percent'            => array(
 				'title'             => __( 'Discount (%)', 'amboss-payments' ),
@@ -98,7 +100,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 				'type'        => 'password',
 				'description' => sprintf(
 					/* translators: %s: link to the API keys page */
-					__( 'In the Amboss dashboard, %s. Give the key Wallets read access and Payments write access. You can limit the key to the wallet below. Copy the key and paste it here.', 'amboss-payments' ),
+					__( 'In the Amboss dashboard, %s. Do not use the presets. Set Environments to "Read", Wallets to "Read" and Payments to "Read + Write". Keep all other permissions at "No access". You can scope the key to the wallet below. Click "Create API Key", then copy the key and paste it here. The key shows only one time.', 'amboss-payments' ),
 					$this->dashboard_link( 'api-keys/create', __( 'create an API key', 'amboss-payments' ) )
 				),
 			),
@@ -107,7 +109,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 				'type'        => 'text',
 				'description' => sprintf(
 					/* translators: %s: link to the wallets page */
-					__( 'The wallet that receives the payments. In the Amboss dashboard, %s and open the wallet. Copy the value under "Wallet ID".', 'amboss-payments' ),
+					__( 'The wallet that receives the payments. In the Amboss dashboard, %s and open the wallet. Click the "WALLET ID" chip at the top right to copy the ID, then paste it here.', 'amboss-payments' ),
 					$this->dashboard_link( 'wallets', __( 'go to Wallets', 'amboss-payments' ) )
 				),
 			),
@@ -116,7 +118,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 				'type'        => 'password',
 				'description' => sprintf(
 					/* translators: 1: link to the webhook page, 2: webhook URL */
-					__( 'Webhooks tell this store when an order is paid. In the Amboss dashboard, %1$s with this URL: %2$s Then copy the "Signing secret" and paste it here.', 'amboss-payments' ),
+					__( 'Webhooks tell this store when an order is paid. In the Amboss dashboard, %1$s. In "URL", paste this URL: %2$s Under "Event Types", click "Select all". Click "Create Endpoint", then copy the "Signing secret" and paste it here. The secret shows only one time.', 'amboss-payments' ),
 					$this->dashboard_link( 'webhooks/create', __( 'create a webhook endpoint', 'amboss-payments' ) ),
 					'<code>' . esc_html( rest_url( Amboss_Webhook::ROUTE_NAMESPACE . Amboss_Webhook::ROUTE ) ) . '</code>'
 				),
@@ -126,11 +128,6 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 				'title'   => __( 'Checkout style', 'amboss-payments' ),
 				'type'    => 'select',
 				'options' => array( '' => __( 'Amboss default', 'amboss-payments' ) ),
-			),
-			'api_url'                     => array(
-				'title'   => __( 'API URL', 'amboss-payments' ),
-				'type'    => 'text',
-				'default' => self::DEFAULT_API_URL,
 			),
 		);
 	}
@@ -174,11 +171,8 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 			return $saved;
 		}
 
-		if ( $pay_with_bitcoin && ! ( $this->is_usd_store() && self::accepts_bitcoin_asset( $asset ) ) ) {
-			$this->add_asset_error( $asset, __( 'Pay with Bitcoin', 'amboss-payments' ) );
-		}
-		if ( $pay_with_cashapp && ! ( $this->is_usd_store() && self::is_btc( $asset ) ) ) {
-			$this->add_asset_error( $asset, __( 'Pay with Cash App', 'amboss-payments' ) );
+		if ( ! ( $this->is_usd_store() && self::accepts_asset( $asset ) ) ) {
+			$this->add_asset_error( $asset );
 		}
 
 		return $saved;
@@ -191,7 +185,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 			&& $this->is_configured()
 			&& null !== $asset
 			&& $this->is_usd_store()
-			&& $this->accepts_asset( $asset );
+			&& self::accepts_asset( $asset );
 	}
 
 	/**
@@ -205,14 +199,10 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 
 		try {
 			$transaction = $this->client()->create_receive(
-				array(
+				$this->amount_input( $total, $order->get_currency() ) + array(
 					'wallet_id'       => $this->get_option( 'wallet_id' ),
-					'fiat_amount'     => array(
-						'amount'   => $total,
-						'currency' => $order->get_currency(),
-					),
-					/* translators: %s: order number */
-					'description'     => sprintf( __( 'Order #%s', 'amboss-payments' ), $order->get_order_number() ),
+					/* translators: 1: store name, 2: order number */
+					'description'     => sprintf( __( '%1$s - Order #%2$s', 'amboss-payments' ), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), $order->get_order_number() ),
 					// A new key per attempt: the API returns the existing transaction for a
 					// repeated key, even when it has expired or the order total changed.
 					'idempotency_key' => "wc-{$order->get_id()}-{$attempt}",
@@ -253,18 +243,11 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 	}
 
 	protected function payment_title(): string {
-		return __( 'Pay with Bitcoin', 'amboss-payments' );
+		return __( 'Pay with Bitcoin / Crypto', 'amboss-payments' );
 	}
 
 	protected function payment_description(): string {
-		return __( 'Pay with Bitcoin over the Lightning Network. You go to a secure Amboss checkout page to pay.', 'amboss-payments' );
-	}
-
-	/**
-	 * @param array{symbol: string, type: string} $asset
-	 */
-	protected function accepts_asset( array $asset ): bool {
-		return self::accepts_bitcoin_asset( $asset );
+		return __( 'Pay instantly with Bitcoin over Lightning, or with other crypto. You go to a secure Amboss checkout page to pay.', 'amboss-payments' );
 	}
 
 	protected function checkout_url( string $url ): string {
@@ -274,15 +257,8 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 	/**
 	 * @param array{symbol: string, type: string} $asset
 	 */
-	protected static function is_btc( array $asset ): bool {
-		return self::BTC_ASSET_TYPE === $asset['type'];
-	}
-
-	/**
-	 * @param array{symbol: string, type: string} $asset
-	 */
-	private static function accepts_bitcoin_asset( array $asset ): bool {
-		return self::is_btc( $asset ) || 0 === strpos( $asset['symbol'], self::USD_STABLECOIN_PREFIX );
+	private static function accepts_asset( array $asset ): bool {
+		return self::BTC_ASSET_TYPE === $asset['type'] || 0 === strpos( $asset['symbol'], self::USD_STABLECOIN_PREFIX );
 	}
 
 	private static function discount_note(): string {
@@ -291,7 +267,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 			return '';
 		}
 		/* translators: %s: discount percentage */
-		return ' ' . sprintf( __( 'Get %s%% off.', 'amboss-payments' ), wc_format_decimal( $percent, 2, true ) );
+		return ' ' . sprintf( __( '(%s%% off)', 'amboss-payments' ), wc_format_decimal( $percent, 2, true ) );
 	}
 
 	/**
@@ -357,9 +333,49 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 	/**
 	 * @param array{symbol: string} $asset
 	 */
-	private function add_asset_error( array $asset, string $payment_option ): void {
-		/* translators: 1: wallet asset symbol, 2: payment option name, 3: store currency */
-		WC_Admin_Settings::add_error( sprintf( __( 'Amboss: a %1$s wallet cannot take "%2$s" payments in a store priced in %3$s.', 'amboss-payments' ), $asset['symbol'], $payment_option, get_woocommerce_currency() ) );
+	private function add_asset_error( array $asset ): void {
+		/* translators: 1: wallet asset symbol, 2: store currency */
+		WC_Admin_Settings::add_error( sprintf( __( 'Amboss: a %1$s wallet cannot take payments in a store priced in %2$s.', 'amboss-payments' ), $asset['symbol'], get_woocommerce_currency() ) );
+	}
+
+	/**
+	 * A USD stablecoin wallet gets the exact amount in its base units, which the
+	 * live API accepts. A BTC wallet needs fiat_amount, so Amboss prices it.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function amount_input( string $total, string $currency ): array {
+		$asset = $this->wallet_asset();
+		if ( null === $asset ) {
+			throw new RuntimeException( 'The wallet asset is not known. Save the Amboss settings again.' );
+		}
+
+		if ( self::BTC_ASSET_TYPE === $asset['type'] ) {
+			return array(
+				'fiat_amount' => array(
+					'amount'   => $total,
+					'currency' => $currency,
+				),
+			);
+		}
+
+		return array(
+			'amount'             => self::to_base_units( $total, (int) $asset['precision'] ),
+			'expires_in_seconds' => self::STABLECOIN_EXPIRY_SECONDS,
+		);
+	}
+
+	/**
+	 * Converts a decimal string such as "38.99" to an integer string in base
+	 * units, without floats: precision 6 gives "38990000".
+	 */
+	private static function to_base_units( string $amount, int $precision ): string {
+		list( $whole, $fraction ) = array_pad( explode( '.', $amount, 2 ), 2, '' );
+		$fraction                 = rtrim( $fraction, '0' );
+		if ( strlen( $fraction ) > $precision ) {
+			throw new RuntimeException( "The amount {$amount} has more decimals than the wallet asset allows ({$precision})." );
+		}
+		return ltrim( $whole . str_pad( $fraction, $precision, '0' ), '0' );
 	}
 
 	/**
@@ -398,7 +414,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 	}
 
 	private function client(): Amboss_Client {
-		return new Amboss_Client( $this->get_option( 'api_url', self::DEFAULT_API_URL ), $this->get_option( 'api_key' ) );
+		return new Amboss_Client( self::API_URL, $this->get_option( 'api_key' ) );
 	}
 
 	private function log_error( string $message, ?Throwable $error ): void {
