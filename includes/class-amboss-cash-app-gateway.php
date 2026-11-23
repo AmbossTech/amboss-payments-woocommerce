@@ -15,6 +15,7 @@ final class Amboss_Cash_App_Gateway extends Amboss_Gateway {
 	public function __construct() {
 		parent::__construct();
 		$this->method_title = __( 'Amboss Payments (Cash App)', 'amboss-payments' );
+		$this->enabled      = 'yes' === $this->enabled && 'yes' === $this->get_option( self::OPTION_PAY_WITH_CASHAPP ) ? 'yes' : 'no';
 
 		// This gateway has no settings form, so a save here would clear the shared settings.
 		remove_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
@@ -22,6 +23,20 @@ final class Amboss_Cash_App_Gateway extends Amboss_Gateway {
 
 	public function get_option_key(): string {
 		return self::SETTINGS_OPTION;
+	}
+
+	/**
+	 * The Payments list toggles a gateway through update_option( 'enabled' ). For
+	 * this gateway that must switch only Cash App, not all of Amboss Payments.
+	 *
+	 * @param string $key
+	 * @param mixed  $value
+	 */
+	public function update_option( $key, $value = '' ): bool {
+		if ( 'enabled' === $key ) {
+			$key = self::OPTION_PAY_WITH_CASHAPP;
+		}
+		return parent::update_option( $key, $value );
 	}
 
 	public function admin_options(): void {

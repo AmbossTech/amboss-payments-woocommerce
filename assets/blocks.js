@@ -1,6 +1,5 @@
 ( function () {
 	const { registerPaymentMethod } = window.wc.wcBlocksRegistry;
-	const { extensionCartUpdate } = window.wc.blocksCheckout;
 	const { getSetting } = window.wc.wcSettings;
 	const { createElement } = window.wp.element;
 	const { decodeEntities } = window.wp.htmlEntities;
@@ -30,6 +29,7 @@
 	if ( ! methods.some( ( method ) => method.settings.has_discount ) ) {
 		return;
 	}
+	const { extensionCartUpdate } = window.wc.blocksCheckout;
 	let lastPaymentMethod = null;
 	data.subscribe( () => {
 		const paymentMethod = data.select( 'wc/store/payment' ).getActivePaymentMethod();

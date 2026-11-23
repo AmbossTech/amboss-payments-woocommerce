@@ -9,12 +9,15 @@ defined( 'ABSPATH' ) || exit;
 final class Amboss_Discount {
 
 	private const STORE_API_NAMESPACE = 'amboss-payments';
+	private const FEE_ID              = 'amboss_discount';
 
 	public static function register(): void {
 		add_action( 'woocommerce_cart_calculate_fees', array( self::class, 'apply' ) );
 		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_classic_checkout_script' ) );
 		add_action( 'woocommerce_blocks_loaded', array( self::class, 'register_store_api_callback' ) );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( self::class, 'use_checkout_payment_method' ), 10, 2 );
+		add_action( 'woocommerce_checkout_create_order_fee_item', array( self::class, 'mark_fee_item' ), 10, 2 );
+		add_filter( 'woocommerce_available_payment_gateways', array( self::class, 'limit_order_pay_gateways' ) );
 	}
 
 	public static function apply( WC_Cart $cart ): void {
@@ -33,8 +36,54 @@ final class Amboss_Discount {
 			return;
 		}
 
-		/* translators: %s: discount percentage */
-		$cart->add_fee( sprintf( __( 'Amboss payment discount (%s%%)', 'amboss-payments' ), wc_format_decimal( $percent, 2, true ) ), -$discount, false );
+		$cart->fees_api()->add_fee(
+			array(
+				'id'      => self::FEE_ID,
+				/* translators: %s: discount percentage */
+				'name'    => sprintf( __( 'Amboss payment discount (%s%%)', 'amboss-payments' ), wc_format_decimal( $percent, 2, true ) ),
+				'amount'  => -$discount,
+				'taxable' => false,
+			)
+		);
+	}
+
+	public static function mark_fee_item( WC_Order_Item_Fee $item, string $fee_key ): void {
+		if ( self::FEE_ID === $fee_key ) {
+			$item->add_meta_data( '_' . self::FEE_ID, 'yes', true );
+		}
+	}
+
+	/**
+	 * The order-pay page charges the saved order total and offers every gateway,
+	 * so an order with the discount may only be paid with Amboss.
+	 *
+	 * @param array<string, WC_Payment_Gateway> $gateways
+	 * @return array<string, WC_Payment_Gateway>
+	 */
+	public static function limit_order_pay_gateways( array $gateways ): array {
+		if ( ! is_wc_endpoint_url( 'order-pay' ) ) {
+			return $gateways;
+		}
+		$order = wc_get_order( absint( get_query_var( 'order-pay' ) ) );
+		if ( ! $order instanceof WC_Order || ! self::has_discount( $order ) ) {
+			return $gateways;
+		}
+		return array_filter(
+			$gateways,
+			static function ( string $id ): bool {
+				return Amboss_Gateway::is_amboss_method( $id );
+			},
+			ARRAY_FILTER_USE_KEY
+		);
+	}
+
+	private static function has_discount( WC_Order $order ): bool {
+		foreach ( $order->get_fees() as $fee ) {
+			if ( 'yes' === $fee->get_meta( '_' . self::FEE_ID ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// The classic checkout does not recalculate totals when the payment method changes.
