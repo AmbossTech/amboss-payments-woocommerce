@@ -2,7 +2,9 @@
 /**
  * Plugin Name:          Amboss Payments for WooCommerce
  * Description:          Accept Bitcoin Lightning and Cash App payments through the Amboss hosted checkout.
+ * x-release-please-start-version
  * Version:              0.1.0
+ * x-release-please-end
  * Requires at least:    6.4
  * Requires PHP:         7.4
  * Requires Plugins:     woocommerce
@@ -15,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'AMBOSS_VERSION', '0.1.0' );
+define( 'AMBOSS_VERSION', '0.1.0' ); // x-release-please-version
 define( 'AMBOSS_PLUGIN_FILE', __FILE__ );
 
 require_once __DIR__ . '/includes/functions.php';

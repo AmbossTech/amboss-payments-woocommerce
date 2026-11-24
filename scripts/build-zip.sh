@@ -8,7 +8,7 @@ version="${tag#v}"
 
 main_file="$(git show "$ref:amboss-payments.php")"
 header_version="$(sed -n 's/^ \* Version: *//p' <<<"$main_file")"
-constant_version="$(sed -n "s/^define( 'AMBOSS_VERSION', '\(.*\)' );/\1/p" <<<"$main_file")"
+constant_version="$(sed -n "s/^define( 'AMBOSS_VERSION', '\([^']*\)' );.*/\1/p" <<<"$main_file")"
 
 if [[ "$header_version" != "$version" || "$constant_version" != "$version" ]]; then
   echo "Version mismatch: tag $version, plugin header $header_version, AMBOSS_VERSION $constant_version" >&2
@@ -17,5 +17,5 @@ fi
 
 # The folder name must be the plugin slug, so WordPress updates the plugin in place.
 git archive --format=zip --prefix=amboss-payments/ -o amboss-payments.zip "$ref" -- \
-  . ':!tests' ':!scripts' ':!.github' ':!.gitignore'
+  . ':!tests' ':!scripts' ':!.github' ':!.gitignore' ':!CHANGELOG.md' ':!release-please-config.json' ':!.release-please-manifest.json'
 echo "Built amboss-payments.zip for $tag"
