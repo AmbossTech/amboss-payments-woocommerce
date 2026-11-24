@@ -303,7 +303,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 		} catch ( Throwable $error ) {
 			return array(
 				'options'     => $options,
-				'description' => __( 'Cannot load the checkout styles.', 'amboss-payments' ) . ' ' . esc_html( $error->getMessage() ),
+				'description' => __( 'Cannot load the checkout styles.', 'amboss-payments' ) . ' ' . $error->getMessage(),
 			);
 		}
 
@@ -373,7 +373,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 		list( $whole, $fraction ) = array_pad( explode( '.', $amount, 2 ), 2, '' );
 		$fraction                 = rtrim( $fraction, '0' );
 		if ( strlen( $fraction ) > $precision ) {
-			throw new RuntimeException( "The amount {$amount} has more decimals than the wallet asset allows ({$precision})." );
+			throw new RuntimeException( esc_html( "The amount {$amount} has more decimals than the wallet asset allows ({$precision})." ) );
 		}
 		return ltrim( $whole . str_pad( $fraction, $precision, '0' ), '0' );
 	}

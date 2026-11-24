@@ -9,7 +9,9 @@
  * Requires PHP:         7.4
  * Requires Plugins:     woocommerce
  * WC requires at least: 8.3
- * Author:               Amboss
+ * WC tested up to:     11.3
+ * Author:               Amboss Technologies
+ * Author URI:           https://amboss.tech
  * License:              MIT
  * License URI:          https://opensource.org/licenses/MIT
  * Text Domain:          amboss-payments

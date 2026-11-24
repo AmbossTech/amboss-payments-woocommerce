@@ -78,17 +78,17 @@ final class Amboss_Client {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'Amboss API request failed: ' . $response->get_error_message() );
+			throw new RuntimeException( esc_html( 'Amboss API request failed: ' . $response->get_error_message() ) );
 		}
 
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( ! empty( $body['errors'] ) ) {
-			throw new RuntimeException( 'Amboss API error: ' . implode( '; ', array_column( $body['errors'], 'message' ) ) );
+			throw new RuntimeException( esc_html( 'Amboss API error: ' . implode( '; ', array_column( $body['errors'], 'message' ) ) ) );
 		}
 
 		$status = wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $status || ! isset( $body['data'] ) ) {
-			throw new RuntimeException( "Amboss API returned HTTP {$status}" );
+			throw new RuntimeException( esc_html( "Amboss API returned HTTP {$status}" ) );
 		}
 
 		return $body['data'];
