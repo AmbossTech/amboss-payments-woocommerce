@@ -87,6 +87,10 @@ Make sure that the webhook URL is correct, that all four events are selected, an
 
 Email support@amboss.tech.
 
+== Screenshots ==
+
+1. The Amboss payment methods at checkout, with the discount in the title.
+
 == Changelog ==
 
 = 0.1.0 =

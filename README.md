@@ -100,4 +100,6 @@ Releases use [release-please](https://github.com/googleapis/release-please), as 
 
 The build stops if the tag and the plugin version are different.
 
+When the repo secrets `SVN_USERNAME` and `SVN_PASSWORD` exist, the `publish` job also deploys the release to the WordPress.org plugin directory (slug `amboss-payments`). It sets `Stable tag` in the deployed `readme.txt` to the release version. The banner, icon and screenshots for WordPress.org are in `.wordpress-org/`.
+
 To build the zip locally: `scripts/build-zip.sh v0.1.0 origin/main`.

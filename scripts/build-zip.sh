@@ -17,5 +17,5 @@ fi
 
 # The folder name must be the plugin slug, so WordPress updates the plugin in place.
 git archive --format=zip --prefix=amboss-payments/ -o amboss-payments.zip "$ref" -- \
-  . ':!tests' ':!scripts' ':!.github' ':!.gitignore' ':!CHANGELOG.md' ':!release-please-config.json' ':!.release-please-manifest.json' ':!README.md'
+  . ':!tests' ':!scripts' ':!.github' ':!.gitignore' ':!CHANGELOG.md' ':!release-please-config.json' ':!.release-please-manifest.json' ':!README.md' ':!.wordpress-org'
 echo "Built amboss-payments.zip for $tag"

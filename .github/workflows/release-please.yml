@@ -46,3 +46,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" amboss-payments.zip --clobber
+
+      # The SVN secrets reach only the deploy step. The deploy runs after they exist.
+      - name: Check for WordPress.org secrets
+        id: svn
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+        run: echo "configured=${SVN_USERNAME:+true}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the WordPress.org build
+        if: steps.svn.outputs.configured == 'true'
+        run: |
+          unzip -q amboss-payments.zip -d build
+          sed -i "s/^Stable tag: .*/Stable tag: ${TAG#v}/" build/amboss-payments/readme.txt
+
+      - name: Deploy to WordPress.org
+        if: steps.svn.outputs.configured == 'true'
+        uses: 10up/action-wordpress-plugin-deploy@54bd289b8525fd23a5c365ec369185f2966529c2 # 2.3.0
+        env:
+          SLUG: amboss-payments
+          VERSION: ${{ env.TAG }}
+          BUILD_DIR: build/amboss-payments
+          ASSETS_DIR: .wordpress-org
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
