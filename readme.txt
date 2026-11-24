@@ -93,5 +93,7 @@ Email support@amboss.tech.
 
 == Changelog ==
 
+The full changelog is in [CHANGELOG.md](https://github.com/AmbossTech/amboss-payments-woocommerce/blob/main/CHANGELOG.md).
+
 = 0.1.0 =
 * First release.
