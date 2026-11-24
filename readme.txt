@@ -38,7 +38,7 @@ You can turn on one payment method or both.
 
 == External services ==
 
-This plugin connects to Amboss Payments, a service of Amboss, to take payments. It does not work without this service.
+This plugin connects to Amboss Payments, a service of Amboss Technologies, to take payments. It does not work without this service.
 
 **Amboss Payments API** (`https://app.amboss.tech/graphql`)
 
