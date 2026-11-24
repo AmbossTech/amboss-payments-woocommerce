@@ -89,3 +89,16 @@ For a USD stablecoin wallet, the plugin sends the exact order total in the asset
 docker run --rm -v "$PWD":/app -w /app php:8.3-cli \
   php -d zend.assertions=1 -d assert.exception=1 tests/selfcheck.php
 ```
+
+## Release
+
+1. In `amboss-payments.php`, set the same new version in the `Version:` header and in `AMBOSS_VERSION`. Merge that change to `main`.
+2. Tag the merge commit and push the tag:
+
+   ```bash
+   git tag v0.2.0 origin/main && git push origin v0.2.0
+   ```
+
+The `Release` workflow runs the self-check, builds `amboss-payments.zip` with `scripts/build-zip.sh`, and publishes a GitHub release with the zip. The workflow stops if the tag and the plugin version are different.
+
+To build the zip locally: `scripts/build-zip.sh v0.2.0 origin/main`.
