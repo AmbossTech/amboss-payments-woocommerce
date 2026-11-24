@@ -92,13 +92,12 @@ docker run --rm -v "$PWD":/app -w /app php:8.3-cli \
 
 ## Release
 
-1. In `amboss-payments.php`, set the same new version in the `Version:` header and in `AMBOSS_VERSION`. Merge that change to `main`.
-2. Tag the merge commit and push the tag:
+Releases use [release-please](https://github.com/googleapis/release-please), as in the SDK.
 
-   ```bash
-   git tag v0.2.0 origin/main && git push origin v0.2.0
-   ```
+1. Merge pull requests to `main` with [Conventional Commits](https://www.conventionalcommits.org) titles (`feat:`, `fix:` and so on).
+2. release-please opens or updates a release pull request. It sets the next version in `amboss-payments.php` and `.release-please-manifest.json`, and adds the changes to `CHANGELOG.md`.
+3. Merge the release pull request. release-please tags `vX.Y.Z` and publishes a GitHub release. Then the `publish` job runs the self-check, builds `amboss-payments.zip` with `scripts/build-zip.sh` and attaches the zip to the release.
 
-The `Release` workflow runs the self-check, builds `amboss-payments.zip` with `scripts/build-zip.sh`, and publishes a GitHub release with the zip. The workflow stops if the tag and the plugin version are different.
+The build stops if the tag and the plugin version are different.
 
-To build the zip locally: `scripts/build-zip.sh v0.2.0 origin/main`.
+To build the zip locally: `scripts/build-zip.sh v0.1.0 origin/main`.

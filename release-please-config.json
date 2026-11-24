@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "always-update": true,
+  "packages": {
+    ".": {
+      "package-name": "amboss-payments",
+      "extra-files": ["amboss-payments.php"]
+    }
+  }
+}
