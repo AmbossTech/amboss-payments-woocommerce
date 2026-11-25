@@ -64,8 +64,10 @@ final class Amboss_Client {
 			array(
 				'timeout' => 30,
 				'headers' => array(
-					'Content-Type' => 'application/json',
-					'x-api-key'    => $this->api_key,
+					'Content-Type'                 => 'application/json',
+					'x-api-key'                    => $this->api_key,
+					'apollographql-client-name'    => 'amboss-payments-woocommerce',
+					'apollographql-client-version' => AMBOSS_VERSION,
 				),
 				'body'    => wp_json_encode(
 					array(
