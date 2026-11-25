@@ -89,3 +89,15 @@ For a USD stablecoin wallet, the plugin sends the exact order total in the asset
 docker run --rm -v "$PWD":/app -w /app php:8.3-cli \
   php -d zend.assertions=1 -d assert.exception=1 tests/selfcheck.php
 ```
+
+## Release
+
+Releases use [release-please](https://github.com/googleapis/release-please), as in the SDK.
+
+1. Merge pull requests to `main` with [Conventional Commits](https://www.conventionalcommits.org) titles (`feat:`, `fix:` and so on).
+2. release-please opens or updates a release pull request. It sets the next version in `amboss-payments.php` and `.release-please-manifest.json`, and adds the changes to `CHANGELOG.md`.
+3. Merge the release pull request. release-please tags `vX.Y.Z` and publishes a GitHub release. Then the `publish` job runs the self-check, builds `amboss-payments.zip` with `scripts/build-zip.sh` and attaches the zip to the release.
+
+The build stops if the tag and the plugin version are different.
+
+To build the zip locally: `scripts/build-zip.sh v0.1.0 origin/main`.
