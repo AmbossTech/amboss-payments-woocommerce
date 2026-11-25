@@ -81,7 +81,7 @@ class Amboss_Gateway extends WC_Payment_Gateway {
 			self::OPTION_PAY_WITH_CASHAPP => array(
 				'type'        => 'checkbox',
 				'label'       => __( 'Pay with Cash App', 'amboss-payments' ),
-				'default'     => 'no',
+				'default'     => 'yes',
 				'description' => __( 'Each option is a separate payment method at checkout. Pay with Cash App opens the checkout with Cash App selected.', 'amboss-payments' ),
 			),
 			'discount_percent'            => array(
